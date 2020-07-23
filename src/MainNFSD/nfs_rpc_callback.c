@@ -538,6 +538,7 @@ int nfs_rpc_create_chan_v40(nfs_client_id_t *clientid, uint32_t flags)
 	code = nfs_clid_connected_socket(clientid, &fd, &proto);
 	if (code) {
 		LogWarn(COMPONENT_NFS_CB, "Failed creating socket");
+		close(fd);
 		return code;
 	}
 
@@ -572,6 +573,7 @@ int nfs_rpc_create_chan_v40(nfs_client_id_t *clientid, uint32_t flags)
 		gsh_free(err);
 		CLNT_DESTROY(chan->clnt);
 		chan->clnt = NULL;
+		close(fd);
 		return EINVAL;
 	}
 
@@ -600,6 +602,7 @@ int nfs_rpc_create_chan_v40(nfs_client_id_t *clientid, uint32_t flags)
 		gsh_free(err);
 		AUTH_DESTROY(chan->auth);
 		chan->auth = NULL;
+		close(fd);
 		return EINVAL;
 	}
 	return 0;
