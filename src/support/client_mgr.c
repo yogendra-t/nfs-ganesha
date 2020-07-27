@@ -137,7 +137,7 @@ struct gsh_client *get_gsh_client(sockaddr_t *client_ipaddr, bool lookup_only)
 	struct gsh_client v;
 	char hoststr[SOCK_NAME_MAX];
 	uint8_t *addr = NULL;
-	uint32_t ipaddr;
+	uint32_t ipaddr = 0;
 	int addr_len = 0;
 	void **cache_slot;
 
@@ -269,7 +269,7 @@ int remove_gsh_client(sockaddr_t *client_ipaddr)
 	struct server_stats *server_st;
 	struct gsh_client v;
 	uint8_t *addr = NULL;
-	uint32_t ipaddr;
+	uint32_t ipaddr = 0;
 	int addr_len = 0;
 	int removed = 0;
 	void **cache_slot;
