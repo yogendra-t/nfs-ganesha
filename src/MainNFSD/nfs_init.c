@@ -109,11 +109,6 @@ tirpc_pkg_params ntirpc_pp = {
 	0,
 	SetNameFunction,
 	(mem_format_t)rpc_warnx,
-	gsh_free_size,
-	gsh_malloc__,
-	gsh_malloc_aligned__,
-	gsh_calloc__,
-	gsh_realloc__,
 };
 
 #ifdef _USE_9P
@@ -980,6 +975,24 @@ void nfs_init_wait(void)
 		pthread_cond_wait(&nfs_init.init_cond, &nfs_init.init_mutex);
 	}
 	PTHREAD_MUTEX_unlock(&nfs_init.init_mutex);
+}
+
+int nfs_init_wait_timeout(int timeout)
+{
+	int rc = 0;
+
+	PTHREAD_MUTEX_lock(&nfs_init.init_mutex);
+	if (!nfs_init.init_complete) {
+		struct timespec ts;
+
+		ts.tv_sec = time(NULL) + timeout;
+		ts.tv_nsec = 0;
+		rc = pthread_cond_timedwait(&nfs_init.init_cond,
+					    &nfs_init.init_mutex, &ts);
+	}
+	PTHREAD_MUTEX_unlock(&nfs_init.init_mutex);
+
+	return rc;
 }
 
 bool nfs_health(void)

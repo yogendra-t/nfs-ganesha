@@ -158,6 +158,8 @@ get_quota(struct fsal_export *exp_hdl, const char *filepath, int quota_type,
 	args.cmd = GPFS_QCMD(Q_GETQUOTA, quota_type);
 	args.qid = quota_id;
 	args.bufferP = &gpfs_quota;
+	if (op_ctx && op_ctx->client)
+		args.cli_ip = op_ctx->client->hostaddr_str;
 
 	fsal_set_credentials(op_ctx->creds);
 	if (gpfs_ganesha(OPENHANDLE_QUOTA, &args) < 0)
@@ -223,6 +225,8 @@ set_quota(struct fsal_export *exp_hdl, const char *filepath, int quota_type,
 	args.cmd = GPFS_QCMD(Q_SETQUOTA, quota_type);
 	args.qid = quota_id;
 	args.bufferP = &gpfs_quota;
+	if (op_ctx && op_ctx->client)
+		args.cli_ip = op_ctx->client->hostaddr_str;
 
 	fsal_set_credentials(op_ctx->creds);
 	if (gpfs_ganesha(OPENHANDLE_QUOTA, &args) < 0)
@@ -537,6 +541,8 @@ int gpfs_claim_filesystem(struct fsal_filesystem *fs, struct fsal_export *exp)
 		goto errout;
 	}
 
+	gpfs_fs->stop_thread = false;
+
 	if (pthread_attr_init(&attr_thr) != 0)
 		LogCrit(COMPONENT_THREAD, "can't init pthread's attributes");
 
@@ -623,6 +629,12 @@ void gpfs_unclaim_filesystem(struct fsal_filesystem *fs)
 			fs->path, gpfs_fs->root_fd, errno);
 	else
 		LogFullDebug(COMPONENT_FSAL, "Thread STOP successful");
+
+	/* Prior to calling pthread_join(), we should set stop_thread=true.
+	 * Its not being set atomically because the synchronization requirement
+	 * is not critical enough.
+	 */
+	gpfs_fs->stop_thread = true;
 
 	pthread_join(gpfs_fs->up_thread, NULL);
 	free_gpfs_filesystem(gpfs_fs);
@@ -763,24 +775,6 @@ gpfs_create_export(struct fsal_module *fsal_hdl, void *parse_node,
 			strerror(status.minor), status.minor);
 		status.major = posix2fsal_error(status.minor);
 		goto detach;
-	}
-
-	/* if the nodeid has not been obtained, get it now */
-	if (!g_nodeid) {
-		struct gpfs_filesystem *gpfs_fs =
-						gpfs_exp->root_fs->private_data;
-		struct grace_period_arg gpa;
-		int nodeid;
-
-		gpa.mountdirfd = gpfs_fs->root_fd;
-
-		nodeid = gpfs_ganesha(OPENHANDLE_GET_NODEID, &gpa);
-		if (nodeid > 0) {
-			g_nodeid = nodeid;
-			LogFullDebug(COMPONENT_FSAL, "nodeid %d", g_nodeid);
-		} else
-			LogCrit(COMPONENT_FSAL,
-			    "OPENHANDLE_GET_NODEID failed rc %d", nodeid);
 	}
 
 	gpfs_exp->pnfs_ds_enabled =

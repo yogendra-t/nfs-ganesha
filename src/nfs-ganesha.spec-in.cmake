@@ -193,7 +193,11 @@ Requires(postun): systemd
 BuildRequires:	initscripts
 %endif
 %if %{with man_page}
+%if (0%{?rhel} && 0%{?rhel} < 8)
+BuildRequires: python-sphinx
+%else
 BuildRequires: python3-sphinx
+%endif
 %endif
 Requires(post): psmisc
 Requires(pre): /usr/sbin/useradd
@@ -208,14 +212,6 @@ gpfs.nfs-ganesha : NFS-GANESHA is a NFS Server running in user space.
 It comes with various back-end modules (called FSALs) provided as
  shared objects to support different file systems and name-spaces.
 
-%package mount-9P
-Summary: a 9p mount helper
-Group: Applications/System
-
-%description mount-9P
-This package contains the mount.9P script that clients can use
-to simplify mounting to NFS-GANESHA. This is a 9p mount helper.
-
 %package vfs
 Summary: The NFS-GANESHA VFS FSAL
 Group: Applications/System
@@ -226,32 +222,24 @@ Requires: nfs-ganesha = %{version}-%{release}
 This package contains a FSAL shared object to
 be used with NFS-Ganesha to support VFS based filesystems
 
-%package proxy
-Summary: The NFS-GANESHA PROXY FSAL
-Group: Applications/System
-BuildRequires: libattr-devel
-Requires: nfs-ganesha = %{version}-%{release}
-
-%description proxy
-This package contains a FSAL shared object to
-be used with NFS-Ganesha to support PROXY based filesystems
-
 %if %{with utils}
 %package utils
 Summary: The NFS-GANESHA util scripts
 Group: Applications/System
 %if (0%{?suse_version} && 0%{?sle_version} >= 150000)
 Requires:	python3-dbus-python, python3-pyparsing
+BuildRequires:  python3-devel
 %else
 %if (0%{?rhel} && 0%{?rhel} >= 8)
 Requires:	python3-dbus, python3-pyparsing
-%else
-#python3-pyparsing not currently available on RHEL7.x
-Requires:	python3-dbus
-%endif
-%endif
-Requires: 	gpfs.nfs-ganesha = %{version}-%{release}, python3
 BuildRequires:  python3-devel
+%else
+# RHEL7.x
+Requires:	dbus-python, pyparsing
+BuildRequires:  python-devel
+%endif
+%endif
+Requires: 	gpfs.nfs-ganesha = %{version}-%{release}
 
 %if %{with gui_utils}
 %if ( 0%{?suse_version} )
@@ -420,34 +408,6 @@ This package contains a FSAL shared object to
 be used with NFS-Ganesha to support Gluster
 %endif
 
-# SELINUX
-%if ( 0%{?fedora} >= 30 || 0%{?rhel} >= 8 )
-%package selinux
-Summary: The NFS-GANESHA SELINUX targeted policy
-Group: Applications/System
-BuildArch:	noarch
-Requires:	nfs-ganesha = %{version}-%{release}
-BuildRequires: selinux-policy-devel
-%{?selinux_requires}
-
-%description selinux
-This package contains an selinux policy for running ganesha.nfsd
-
-%post selinux
-%selinux_modules_install %{_datadir}/selinux/packages/ganesha.pp.bz2
-
-%pre selinux
-%selinux_relabel_pre
-
-%postun selinux
-if [ $1 -eq 0 ]; then
-    %selinux_modules_uninstall ganesha
-fi
-
-%posttrans
-%selinux_relabel_post
-%endif
-
 %prep
 %setup -q -n %{sourcename}
 
@@ -471,9 +431,9 @@ cmake .	-DCMAKE_BUILD_TYPE=Debug			\
 	-DUSE_RADOS_RECOV=%{use_rados_recov}		\
 	-DRADOS_URLS=%{use_rados_urls}			\
 	-DUSE_FSAL_VFS=ON				\
-	-DUSE_FSAL_PROXY=ON				\
+	-DUSE_FSAL_PROXY=OFF				\
 	-DUSE_DBUS=ON					\
-	-DUSE_9P=ON					\
+	-DUSE_9P=OFF					\
 	-DDISTNAME_HAS_GIT_DATA=OFF			\
 	-DUSE_MAN_PAGE=%{use_man_page}                  \
 	-DRPCBIND=%{use_rpcbind}			\
@@ -494,11 +454,6 @@ cmake .	-DCMAKE_BUILD_TYPE=Debug			\
 
 make %{?_smp_mflags} || make %{?_smp_mflags} || make
 
-%if ( 0%{?fedora} >= 30 || 0%{?rhel} >= 8 )
-make -C selinux -f /usr/share/selinux/devel/Makefile ganesha.pp
-pushd selinux && bzip2 -9 ganesha.pp && popd
-%endif
-
 %install
 mkdir -p %{buildroot}%{_sysconfdir}/ganesha/
 mkdir -p %{buildroot}%{_sysconfdir}/dbus-1/system.d
@@ -513,7 +468,6 @@ mkdir -p %{buildroot}%{_libexecdir}/ganesha
 install -m 644 config_samples/logrotate_ganesha	%{buildroot}%{_sysconfdir}/logrotate.d/ganesha
 install -m 644 scripts/ganeshactl/org.ganesha.nfsd.conf	%{buildroot}%{_sysconfdir}/dbus-1/system.d
 install -m 755 scripts/nfs-ganesha-config.sh %{buildroot}%{_libexecdir}/ganesha
-install -m 755 tools/mount.9P	%{buildroot}%{_sbindir}/mount.9P
 
 install -m 644 config_samples/vfs.conf %{buildroot}%{_sysconfdir}/ganesha
 
@@ -577,15 +531,13 @@ install -m 755 scripts/init.d/nfs-ganesha.gpfs		%{buildroot}%{_sysconfdir}/init.
 
 make DESTDIR=%{buildroot} install
 
-%if ( 0%{?fedora} >= 30 || 0%{?rhel} >= 8 )
-install -d %{buildroot}%{_selinux_store_path}/packages
-install -d -p %{buildroot}%{_selinux_store_path}/devel/include/contrib
-install -p -m 644 selinux/ganesha.if %{buildroot}%{_selinux_store_path}/devel/include/contrib
-install -m 0644 selinux/ganesha.pp.bz2 %{buildroot}%{_selinux_store_path}/packages
-%endif
-
+%if (0%{?rhel} && 0%{?rhel} < 8)
+rm -f %{buildroot}/%{python2_sitelib}/gpfs*
+rm -f %{buildroot}/%{python2_sitelib}/__init__.*
+%else
 rm -f %{buildroot}/%{python3_sitelib}/gpfs*
 rm -f %{buildroot}/%{python3_sitelib}/__init__.*
+%endif
 
 %post
 %if ( 0%{?suse_version} )
@@ -686,24 +638,11 @@ exit 0
 %endif
 %endif
 
-
-%files mount-9P
-%{_sbindir}/mount.9P
-%if %{with man_page}
-%{_mandir}/*/ganesha-9p-config.8.gz
-%endif
-
 %files vfs
 %{_libdir}/ganesha/libfsalvfs*
 %config(noreplace) %{_sysconfdir}/ganesha/vfs.conf
 %if %{with man_page}
 %{_mandir}/*/ganesha-vfs-config.8.gz
-%endif
-
-%files proxy
-%{_libdir}/ganesha/libfsalproxy*
-%if %{with man_page}
-%{_mandir}/*/ganesha-proxy-config.8.gz
 %endif
 
 # Optional packages
@@ -780,12 +719,6 @@ exit 0
 %endif
 %endif
 
-%if ( 0%{?fedora} >= 30 || 0%{?rhel} >= 8 )
-%files selinux
-%attr(0644,root,root) %{_selinux_store_path}/packages/ganesha.pp.bz2
-%attr(0644,root,root) %{_selinux_store_path}/devel/include/contrib/ganesha.if
-%endif
-
 %if %{with panfs}
 %files panfs
 %{_libdir}/ganesha/libfsalpanfs*
@@ -804,8 +737,13 @@ exit 0
 
 %if %{with utils}
 %files utils
+%if (0%{?rhel} && 0%{?rhel} < 8)
+%{python2_sitelib}/Ganesha/*
+%{python2_sitelib}/ganeshactl-*-info
+%else
 %{python3_sitelib}/Ganesha/*
 %{python3_sitelib}/ganeshactl-*-info
+%endif
 
 %if %{with gui_utils}
 %{_bindir}/ganesha-admin

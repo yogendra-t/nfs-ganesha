@@ -302,7 +302,7 @@ static inline int32_t nfs_clid_connected_socket(nfs_client_id_t *clientid,
 
 	assert(clientid->cid_minorversion == 0);
 
-	*fd = 0;
+	*fd = -1;
 	*proto = -1;
 
 	switch (clientid->cid_cb.v40.cb_addr.nc) {
@@ -538,7 +538,6 @@ int nfs_rpc_create_chan_v40(nfs_client_id_t *clientid, uint32_t flags)
 	code = nfs_clid_connected_socket(clientid, &fd, &proto);
 	if (code) {
 		LogWarn(COMPONENT_NFS_CB, "Failed creating socket");
-		close(fd);
 		return code;
 	}
 
@@ -602,7 +601,8 @@ int nfs_rpc_create_chan_v40(nfs_client_id_t *clientid, uint32_t flags)
 		gsh_free(err);
 		AUTH_DESTROY(chan->auth);
 		chan->auth = NULL;
-		close(fd);
+		CLNT_DESTROY(chan->clnt);
+		chan->clnt = NULL;
 		return EINVAL;
 	}
 	return 0;
