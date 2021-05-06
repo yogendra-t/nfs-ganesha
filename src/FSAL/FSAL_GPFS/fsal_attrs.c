@@ -134,8 +134,10 @@ GPFSFSAL_getattrs(struct fsal_export *export, struct gpfs_filesystem *gpfs_fs,
 	/* Initialize fsal_fsid to 0.0 in case older GPFS */
 	buffxstat.fsal_fsid.major = 0;
 	buffxstat.fsal_fsid.minor = 0;
-
-	expire = op_ctx->export_perms->expire_time_attr > 0;
+	if (op_ctx->export_perms != NULL)
+		expire = op_ctx->export_perms->expire_time_attr > 0;
+	else
+		expire = false;
 
 	gpfs_export = container_of(export, struct gpfs_fsal_export, export);
 

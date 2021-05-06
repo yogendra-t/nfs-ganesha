@@ -51,8 +51,12 @@ mdc_up_invalidate(const struct fsal_up_vector *vec, struct gsh_buffdesc *handle,
 
 	req_ctx.ctx_export = vec->up_gsh_export;
 	req_ctx.fsal_export = vec->up_fsal_export;
+	req_ctx.export_perms = &(vec->up_gsh_export->export_perms);
 	save_ctx = op_ctx;
 	op_ctx = &req_ctx;
+	struct attrlist attrs_in;
+	struct mdcache_fsal_export *export = NULL;
+	struct fsal_obj_handle *sub_handle = NULL;
 
 	key.fsal = vec->up_fsal_export->sub_export->fsal;
 	(void) cih_hash_key(&key, vec->up_fsal_export->sub_export->fsal, handle,
@@ -61,8 +65,30 @@ mdc_up_invalidate(const struct fsal_up_vector *vec, struct gsh_buffdesc *handle,
 	status = mdcache_find_keyed(&key, &entry);
 	if (status.major == ERR_FSAL_NOENT) {
 		/* Not cached, so invalidate is a success */
-		status = fsalstat(ERR_FSAL_NO_ERROR, 0);
-		goto out;
+		export = mdc_export(vec->up_fsal_export);
+		subcall_raw(export,
+			status = vec->up_fsal_export->exp_ops.create_handle(vec->up_fsal_export,
+										handle,
+										&sub_handle,
+										NULL);
+			);
+		if (FSAL_IS_ERROR(status)) {
+			LogFullDebug(COMPONENT_CACHE_INODE,"create_handle failed");
+			goto out;
+		}
+
+		LogFullDebug(COMPONENT_CACHE_INODE,"subhandle created,sub_handle=%p",sub_handle);
+		memset(&attrs_in, 0, sizeof(attrs_in));
+		status = mdcache_new_entry(export, sub_handle, &attrs_in, NULL,
+					false, &entry, NULL, MDC_REASON_UPCALL);
+
+		if (FSAL_IS_ERROR(status)) {
+			entry = NULL;
+			LogFullDebug(COMPONENT_CACHE_INODE,"mdcache_new_entry failed with MDC_REASON_UPCALL");
+			goto out;
+		} else {
+			LogFullDebug(COMPONENT_CACHE_INODE,"mdcache_new_entry created with MDC_REASON_UPCALL");
+		}
 	} else if (FSAL_IS_ERROR(status)) {
 		/* Real error */
 		goto out;

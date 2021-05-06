@@ -832,6 +832,11 @@ mdcache_new_entry(struct mdcache_fsal_export *export,
 		    op_ctx->export_perms->expire_time_attr;
 	}
 
+	if (reason == MDC_REASON_UPCALL)
+	{
+		nentry->attrs.expire_time_attr = 0;
+	}
+
 	/* Validate the attributes we just set. */
 	mdc_fixup_md(nentry, &nentry->attrs);
 

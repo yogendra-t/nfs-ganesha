@@ -1883,8 +1883,10 @@ void mdcache_lru_insert(mdcache_entry_t *entry, mdc_reason_t reason)
 	/* Enqueue. */
 	switch (reason) {
 	case MDC_REASON_DEFAULT:
+	case MDC_REASON_UPCALL:
 		lru_insert_entry(entry, &LRU[entry->lru.lane].L1, LRU_LRU);
-		break;
+                break;
+
 	case MDC_REASON_SCAN:
 		lru_insert_entry(entry, &LRU[entry->lru.lane].L2, LRU_MRU);
 		break;
